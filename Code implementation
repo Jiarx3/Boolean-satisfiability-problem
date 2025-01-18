@@ -1,0 +1,192 @@
+#include<iostream>
+#include<cstdlib>
+#include<stack>
+using namespace std;
+
+//用结构体表示单个的析取式
+struct Disjunction{
+    int v1,v2,v3;
+    Disjunction():v1 (0),v2(0),v3(0){};
+    Disjunction(int value1,int value2,int value3):v1 (value1),v2(value2),v3(value3){};
+};
+
+struct undo{
+	int disIndex;
+	Disjunction originalDis;
+	bool isDeleted;
+	undo():disIndex(0),originalDis(Disjunction()),isDeleted(0){};
+	undo(int Index, Disjunction OD, bool del):disIndex(Index), originalDis(OD), isDeleted(del){};
+};
+
+
+//相关函数的定义
+bool simplifyCNF(Disjunction *cnf, stack<undo> &undoChanges, bool *isDeleted, int &NumDisjunction,int a, bool value){//赋值，简化合取范式
+	for(int i=0;i<NumDisjunction;i++){
+     if(isDeleted[i])continue;
+	 if(value){
+     if(cnf[i].v1==a||cnf[i].v2==a||cnf[i].v3==a){
+     	undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+        isDeleted[i]=true;
+       }
+     else{
+        if(cnf[i].v1==-a){
+	    undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+	    cnf[i].v1=0;
+        }
+        if(cnf[i].v2==-a){
+        undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+	    cnf[i].v2=0;
+	    }
+        if(cnf[i].v3==-a){
+	    undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+        cnf[i].v3=0;
+        }
+        if(cnf[i].v1==0&&cnf[i].v2==0&&cnf[i].v3==0){
+            return false; 
+        }
+    } 
+ }else if(!value){
+    if(cnf[i].v1==-a||cnf[i].v2==-a||cnf[i].v3==-a){
+    	undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+        isDeleted[i]=true; 
+        }
+    else{
+        if(!isDeleted[i]){
+            if(cnf[i].v1==a){
+	            undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+	            cnf[i].v1=0;
+            }
+            if(cnf[i].v2==a){
+	            undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+	            cnf[i].v2=0;
+            }
+            if(cnf[i].v3==a){
+	            undoChanges.push(undo(i, cnf[i], isDeleted[i]));
+	            cnf[i].v3=0;
+	        }
+            if(cnf[i].v1==0&&cnf[i].v2==0&&cnf[i].v3==0){
+                return false;
+            }
+        }
+    }
+  }
+}
+return true;
+}
+
+
+bool isCNFSatisfied(int NumDisjunction,bool* isDeleted){//判断合取范式是不是已经满足了
+   for(int i=0;i<NumDisjunction;i++){
+    if(!isDeleted[i])return false;
+   }
+   return true;
+}
+
+int Select(Disjunction *cnf,bool *isDeleted,int NumDisjunction,int NumVariable,bool &judge){//选定一个变量，返回该变量的编号。
+    int *positive=new int[NumVariable];
+    int *negative=new int[NumVariable];
+    for(int i=0;i<NumVariable;i++){
+    	positive[i]=0;
+    	negative[i]=0;
+	}
+    for(int i=0;i<NumDisjunction;i++){
+    	if(isDeleted[i])continue;
+    	else{
+    		if(cnf[i].v1>0){positive[abs(cnf[i].v1)-1]++;}
+    		else if(cnf[i].v1<0){negative[abs(cnf[i].v1)-1]++;}
+    		
+    		if(cnf[i].v2>0){positive[abs(cnf[i].v2)-1]++;}
+    		else if(cnf[i].v2<0){negative[abs(cnf[i].v2)-1]++;}
+    		
+    		if(cnf[i].v3>0){positive[abs(cnf[i].v3)-1]++;}
+    		else if(cnf[i].v3<0){negative[abs(cnf[i].v3)-1]++;}
+		}
+	}
+	int maxVar=0;
+	int maxVarcount=0;
+	for(int i=0;i<NumVariable;i++){
+		if((positive[i]+negative[i])>maxVarcount){
+			maxVarcount=positive[i]+negative[i];
+			maxVar=i;
+			judge=(positive[i]>=negative[i]);
+		}
+	}
+	delete []positive;
+	delete []negative;
+	return maxVar+1;
+}
+
+
+
+
+bool solveSAT(Disjunction *cnf, bool *isDeleted, int &NumDisjunction,int NumVariable,int *assignment){//回溯求解函数
+    stack<undo> undoChanges;
+	if(isCNFSatisfied(NumDisjunction,isDeleted)){
+        return true;
+    }
+    bool judge;
+    int attemptVarNum=Select(cnf,isDeleted,NumDisjunction,NumVariable,judge);
+    
+    if(simplifyCNF(cnf, undoChanges, isDeleted, NumDisjunction,attemptVarNum,judge)){
+        if(judge)assignment[attemptVarNum-1]=1;
+        else if(!judge)assignment[attemptVarNum-1]=0;
+    if(solveSAT(cnf, isDeleted,NumDisjunction,NumVariable,assignment)){
+        return true;
+    }
+}
+    
+    while(!undoChanges.empty()){
+    		undo temp=undoChanges.top();
+    		undoChanges.pop();
+    		cnf[temp.disIndex]=temp.originalDis;
+    		isDeleted[temp.disIndex]=temp.isDeleted;
+	}
+    
+	
+    if(simplifyCNF(cnf,undoChanges, isDeleted,NumDisjunction,attemptVarNum,!judge)){
+        if(judge)assignment[attemptVarNum-1]=0;
+        else if(!judge)assignment[attemptVarNum-1]=1;
+        if(solveSAT(cnf, isDeleted,NumDisjunction,NumVariable,assignment)){
+            return true;
+        }
+    }
+    
+    while(!undoChanges.empty()){
+    		undo temp=undoChanges.top();
+    		undoChanges.pop();
+    		cnf[temp.disIndex]=temp.originalDis;
+    		isDeleted[temp.disIndex]=temp.isDeleted;
+	}
+    return false;
+}
+
+int main(){//main函数
+    int NumDisjunction,NumVariable;
+    cin>>NumVariable;
+    cin>>NumDisjunction;
+    Disjunction *cnf=new Disjunction[NumDisjunction];
+    bool *isDeleted=new bool[NumDisjunction];
+    for(int i=0;i<NumDisjunction;i++){
+        cin>>cnf[i].v1>>cnf[i].v2>>cnf[i].v3;
+    }
+    int *assignment=new int[NumVariable];
+    int maxVar=0;
+    for(int i=0;i<NumVariable;i++){
+        assignment[i]=0;
+    }
+    for(int i=0;i<NumDisjunction;i++){
+     isDeleted[i]=false;
+}
+    if(solveSAT(cnf, isDeleted,NumDisjunction,NumVariable,assignment)){
+    for(int i=0;i<NumVariable;i++){
+        cout<<assignment[i]<<" ";
+    }
+  }
+  else{
+	cout<<"Unsatisfied";
+	}
+    delete[] cnf;
+    delete[] assignment;
+    delete[] isDeleted;
+    return 0;
+}
